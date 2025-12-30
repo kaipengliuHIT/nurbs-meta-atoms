@@ -7,7 +7,7 @@ import math
 from typing import Tuple, Optional
 
 class PositionalEncoding(nn.Module):
-    """位置编码模块"""
+    """Positional encoding module"""
     def __init__(self, d_model: int, max_len: int = 5000):
         super(PositionalEncoding, self).__init__()
         pe = torch.zeros(max_len, d_model)
@@ -24,16 +24,16 @@ class PositionalEncoding(nn.Module):
 
 
 class NURBSTransformer(nn.Module):
-    """基于Transformer的NURBS代理模型"""
+    """Transformer-based NURBS surrogate model"""
     def __init__(self, 
-                 input_dim: int = 2,  # 每个控制点的维度 (x, y)
-                 n_control_points: int = 8,  # 控制点数量
-                 d_model: int = 64,  # 模型维度
-                 nhead: int = 8,  # 注意力头数
-                 num_layers: int = 6,  # Transformer层数
-                 d_ff: int = 256,  # 前馈网络维度
+                 input_dim: int = 2,  # Dimension of each control point (x, y)
+                 n_control_points: int = 8,  # Number of control points
+                 d_model: int = 64,  # Model dimension
+                 nhead: int = 8,  # Number of attention heads
+                 num_layers: int = 6,  # Number of Transformer layers
+                 d_ff: int = 256,  # Feed-forward network dimension
                  dropout: float = 0.1,
-                 output_dim: int = 2):  # 输出维度 (phase, transmittance)
+                 output_dim: int = 2):  # Output dimension (phase, transmittance)
         super(NURBSTransformer, self).__init__()
         
         self.input_dim = input_dim
@@ -41,13 +41,13 @@ class NURBSTransformer(nn.Module):
         self.d_model = d_model
         self.output_dim = output_dim
         
-        # 输入投影层
+        # Input projection layer
         self.input_projection = nn.Linear(input_dim, d_model)
         
-        # 位置编码
+        # Positional encoding
         self.pos_encoder = PositionalEncoding(d_model, max_len=n_control_points)
         
-        # Transformer编码器
+        # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -57,62 +57,62 @@ class NURBSTransformer(nn.Module):
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
-        # 输出层
+        # Output layer
         self.output_projection = nn.Sequential(
-            nn.Linear(d_model * n_control_points, d_model * 2),  # 扩展特征
+            nn.Linear(d_model * n_control_points, d_model * 2),  # Expand features
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(d_model * 2, d_model),  # 压缩
+            nn.Linear(d_model * 2, d_model),  # Compress
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(d_model, output_dim)  # phase and transmittance
         )
         
-        # 初始化权重
+        # Initialize weights
         self._init_weights()
     
     def _init_weights(self):
-        """初始化权重"""
+        """Initialize weights"""
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        前向传播
+        Forward propagation
         Args:
-            x: (batch_size, n_control_points, input_dim) 控制点坐标
+            x: (batch_size, n_control_points, input_dim) Control point coordinates
         Returns:
             output: (batch_size, output_dim) phase and transmittance
         """
         batch_size, n_points, input_dim = x.shape
         
-        # 输入投影
+        # Input projection
         x = self.input_projection(x)  # (batch_size, n_points, d_model)
         
-        # 添加位置编码
+        # Add positional encoding
         x = x.transpose(0, 1)  # (n_points, batch_size, d_model)
         x = self.pos_encoder(x)
         
-        # Transformer编码
+        # Transformer encoding
         x = self.transformer_encoder(x)  # (n_points, batch_size, d_model)
         x = x.transpose(0, 1)  # (batch_size, n_points, d_model)
         
-        # 展平特征
+        # Flatten features
         x = x.reshape(batch_size, -1)  # (batch_size, n_points * d_model)
         
-        # 输出投影
+        # Output projection
         output = self.output_projection(x)  # (batch_size, output_dim)
         
         return output
 
 
 class NURBSDataset(Dataset):
-    """NURBS数据集类"""
+    """NURBS dataset class"""
     def __init__(self, control_points: np.ndarray, targets: np.ndarray):
         """
         Args:
-            control_points: (n_samples, n_control_points, 2) 控制点坐标
+            control_points: (n_samples, n_control_points, 2) Control point coordinates
             targets: (n_samples, 2) phase and transmittance
         """
         self.control_points = torch.FloatTensor(control_points)
@@ -129,7 +129,7 @@ def normalize_control_points(control_points: np.ndarray,
                            min_val: float = -0.2, 
                            max_val: float = 0.2) -> np.ndarray:
     """
-    归一化控制点坐标
+    Normalize control point coordinates
     """
     return (control_points - min_val) / (max_val - min_val)
 
@@ -138,7 +138,7 @@ def denormalize_control_points(normalized_points: np.ndarray,
                              min_val: float = -0.2, 
                              max_val: float = 0.2) -> np.ndarray:
     """
-    反归一化控制点坐标
+    Denormalize control point coordinates
     """
     return normalized_points * (max_val - min_val) + min_val
 
@@ -149,12 +149,12 @@ def normalize_targets(targets: np.ndarray,
                      trans_min: float = 0.0,
                      trans_max: float = 1.0) -> np.ndarray:
     """
-    归一化目标值 (相位和透射率)
+    Normalize target values (phase and transmittance)
     """
     normalized = targets.copy()
-    # 归一化相位到 [0, 1]
+    # Normalize phase to [0, 1]
     normalized[:, 0] = (targets[:, 0] - phase_min) / (phase_max - phase_min)
-    # 归一化透射率到 [0, 1]
+    # Normalize transmittance to [0, 1]
     normalized[:, 1] = (targets[:, 1] - trans_min) / (trans_max - trans_min)
     return normalized
 
@@ -165,18 +165,18 @@ def denormalize_targets(normalized_targets: np.ndarray,
                        trans_min: float = 0.0,
                        trans_max: float = 1.0) -> np.ndarray:
     """
-    反归一化目标值
+    Denormalize target values
     """
     targets = normalized_targets.copy()
-    # 反归一化相位
+    # Denormalize phase
     targets[:, 0] = normalized_targets[:, 0] * (phase_max - phase_min) + phase_min
-    # 反归一化透射率
+    # Denormalize transmittance
     targets[:, 1] = normalized_targets[:, 1] * (trans_max - trans_min) + trans_min
     return targets
 
 
 class NURBSTransformerModel:
-    """NURBS Transformer代理模型包装器"""
+    """NURBS Transformer surrogate model wrapper"""
     def __init__(self, 
                  n_control_points: int = 8,
                  d_model: int = 64,
@@ -211,11 +211,11 @@ class NURBSTransformerModel:
               val_loader: DataLoader,
               epochs: int = 100,
               save_path: str = "best_nurbs_transformer.pth"):
-        """训练模型"""
+        """Train model"""
         best_val_loss = float('inf')
         
         for epoch in range(epochs):
-            # 训练阶段
+            # Training phase
             self.model.train()
             train_loss = 0.0
             for batch_points, batch_targets in train_loader:
@@ -227,7 +227,7 @@ class NURBSTransformerModel:
                 loss = self.criterion(outputs, batch_targets)
                 loss.backward()
                 
-                # 梯度裁剪
+                # Gradient clipping
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 
                 self.optimizer.step()
@@ -235,7 +235,7 @@ class NURBSTransformerModel:
             
             avg_train_loss = train_loss / len(train_loader)
             
-            # 验证阶段
+            # Validation phase
             self.model.eval()
             val_loss = 0.0
             with torch.no_grad():
@@ -267,28 +267,28 @@ class NURBSTransformerModel:
             if epoch % 10 == 0:
                 print(f'Epoch [{epoch}/{epochs}], Train Loss: {avg_train_loss:.6f}, Val Loss: {avg_val_loss:.6f}')
         
-        print(f"训练完成，最佳验证损失: {best_val_loss:.6f}")
+        print(f"Training complete, best validation loss: {best_val_loss:.6f}")
     
     def predict(self, control_points: np.ndarray) -> np.ndarray:
-        """预测相位和透射率"""
+        """Predict phase and transmittance"""
         self.model.eval()
         with torch.no_grad():
             if isinstance(control_points, np.ndarray):
-                control_points = torch.FloatTensor(control_points).unsqueeze(0)  # 添加批次维度
+                control_points = torch.FloatTensor(control_points).unsqueeze(0)  # Add batch dimension
             control_points = control_points.to(self.device)
             
             outputs = self.model(control_points)
             return outputs.cpu().numpy()
     
     def load_model(self, model_path: str):
-        """加载预训练模型"""
+        """Load pre-trained model"""
         checkpoint = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        print(f"模型已从 {model_path} 加载")
+        print(f"Model loaded from {model_path}")
     
     def evaluate(self, test_loader: DataLoader) -> Tuple[float, float]:
-        """评估模型性能"""
+        """Evaluate model performance"""
         self.model.eval()
         total_loss = 0.0
         total_samples = 0
@@ -307,7 +307,7 @@ class NURBSTransformerModel:
                 total_loss += loss.item() * batch_points.size(0)
                 total_samples += batch_points.size(0)
                 
-                # 计算相位和透射率的单独误差
+                # Calculate individual errors for phase and transmittance
                 phase_errors.extend(torch.abs(outputs[:, 0] - batch_targets[:, 0]).cpu().numpy())
                 trans_errors.extend(torch.abs(outputs[:, 1] - batch_targets[:, 1]).cpu().numpy())
         
@@ -319,8 +319,8 @@ class NURBSTransformerModel:
 
 
 if __name__ == "__main__":
-    print("NURBS Transformer代理模型定义完成")
-    print("模型结构:")
-    print("- 输入: 控制点坐标 (N, 2) -> NURBS形状")
-    print("- 输出: 相位和透射率 (2,)")
-    print("- 使用Transformer架构处理控制点序列")
+    print("NURBS Transformer surrogate model definition complete")
+    print("Model structure:")
+    print("- Input: Control point coordinates (N, 2) -> NURBS shape")
+    print("- Output: Phase and transmittance (2,)")
+    print("- Uses Transformer architecture to process control point sequences")

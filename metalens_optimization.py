@@ -7,7 +7,7 @@ from typing import List, Tuple, Optional
 import sys
 import os
 
-# 添加当前目录到路径
+# Add current directory to path
 sys.path.append('/mnt/e/pythoncode/nurbs-meta-atoms')
 
 from transformer_nurbs_model import (
@@ -18,31 +18,31 @@ from transformer_nurbs_model import (
 from nurbs_atoms_data import Simulation
 
 class MetalensOptimizer:
-    """超透镜优化器类"""
+    """Metalens optimizer class"""
     
     def __init__(self, 
                  model_path: str = "nurbs_transformer_model.pth",
                  n_segments: int = 64,
-                 focal_length: float = 50e-6,  # 焦距 50 μm
-                 wavelength: float = 532e-9,   # 波长 532 nm
-                 lens_radius: float = 50e-6):  # 透镜半径 50 μm
+                 focal_length: float = 50e-6,  # Focal length 50 μm
+                 wavelength: float = 532e-9,   # Wavelength 532 nm
+                 lens_radius: float = 50e-6):  # Lens radius 50 μm
         """
-        初始化超透镜优化器
+        Initialize metalens optimizer
         
         Args:
-            model_path: 代理模型路径
-            n_segments: 透镜分段数
-            focal_length: 焦距
-            wavelength: 工作波长
-            lens_radius: 透镜半径
+            model_path: Surrogate model path
+            n_segments: Number of lens segments
+            focal_length: Focal length
+            wavelength: Operating wavelength
+            lens_radius: Lens radius
         """
         self.n_segments = n_segments
         self.focal_length = focal_length
         self.wavelength = wavelength
         self.lens_radius = lens_radius
-        self.k = 2 * np.pi / wavelength  # 波数
+        self.k = 2 * np.pi / wavelength  # Wave number
         
-        # 加载代理模型
+        # Load surrogate model
         self.model = NURBSTransformerModel(
             n_control_points=8,
             d_model=128,
@@ -55,24 +55,24 @@ class MetalensOptimizer:
         if os.path.exists(model_path):
             self.model.load_model(model_path)
             self.model_available = True
-            print(f"已加载代理模型: {model_path}")
+            print(f"Loaded surrogate model: {model_path}")
         else:
-            print(f"代理模型 {model_path} 不存在，将使用真实仿真")
+            print(f"Surrogate model {model_path} does not exist, will use real simulation")
             self.model_available = False
     
     def ideal_phase_profile(self, r: np.ndarray) -> np.ndarray:
         """
-        计算理想相位分布
+        Calculate ideal phase distribution
         
         Args:
-            r: 径向坐标
+            r: Radial coordinate
             
         Returns:
-            理想相位分布
+            Ideal phase distribution
         """
-        # 理想超透镜相位分布: φ(r) = -k * (sqrt(r^2 + f^2) - f)
+        # Ideal metalens phase distribution: φ(r) = -k * (sqrt(r^2 + f^2) - f)
         phase = -self.k * (np.sqrt(r**2 + self.focal_length**2) - self.focal_length)
-        # 将相位限制在 [-π, π] 范围内
+        # Constrain phase to [-π, π] range
         phase = np.mod(phase + np.pi, 2*np.pi) - np.pi
         return phase
     
@@ -82,19 +82,19 @@ class MetalensOptimizer:
                                      phase_req: float, 
                                      transmittance_req: float = 1.0) -> np.ndarray:
         """
-        为单个分段生成NURBS控制点
+        Generate NURBS control points for a single segment
         
         Args:
-            segment_idx: 分段索引
-            radial_pos: 径向位置
-            phase_req: 所需相位
-            transmittance_req: 所需透射率
+            segment_idx: Segment index
+            radial_pos: Radial position
+            phase_req: Required phase
+            transmittance_req: Required transmittance
             
         Returns:
-            控制点坐标 (8, 2)
+            Control point coordinates (8, 2)
         """
-        # 基础控制点 - 根据径向位置调整尺寸
-        base_size = 0.05 * (radial_pos / self.lens_radius + 0.5)  # 尺寸随径向位置变化
+        # Base control points - adjust size based on radial position
+        base_size = 0.05 * (radial_pos / self.lens_radius + 0.5)  # Size varies with radial position
         
         base_control_points = np.array([
             (base_size, 0), 
@@ -107,14 +107,14 @@ class MetalensOptimizer:
             (0.707*base_size, -0.707*base_size)
         ])
         
-        # 根据分段索引添加角度旋转
+        # Add angular rotation based on segment index
         angle = 2 * np.pi * segment_idx / self.n_segments
         cos_a, sin_a = np.cos(angle), np.sin(angle)
         
         rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
         rotated_points = np.dot(base_control_points, rotation_matrix.T)
         
-        # 添加径向偏移
+        # Add radial offset
         radial_offset = radial_pos
         angle_offset = angle
         offset_x = radial_offset * np.cos(angle_offset)
@@ -126,28 +126,28 @@ class MetalensOptimizer:
     
     def predict_optical_response(self, control_points: np.ndarray) -> Tuple[float, float]:
         """
-        预测光学响应（相位和透射率）
+        Predict optical response (phase and transmittance)
         
         Args:
-            control_points: 控制点坐标
+            control_points: Control point coordinates
             
         Returns:
-            (相位, 透射率)
+            (phase, transmittance)
         """
         if self.model_available:
-            # 使用代理模型预测
+            # Use surrogate model for prediction
             normalized_input = normalize_control_points(control_points.reshape(1, 8, 2))
             prediction = self.model.predict(normalized_input)
             phase, transmittance = denormalize_targets(prediction)[0]
             return float(phase), float(transmittance)
         else:
-            # 使用真实仿真（如果可用）
+            # Use real simulation (if available)
             try:
                 sim = Simulation(control_points=control_points)
                 transmittance, phase = sim.run_forward(wavelength_start=self.wavelength, wavelength_stop=self.wavelength)
                 return phase, transmittance
             except:
-                # 如果仿真失败，返回随机值
+                # If simulation fails, return random values
                 return np.random.uniform(-np.pi, np.pi), np.random.uniform(0.5, 1.0)
     
     def calculate_segment_response(self, 
@@ -155,20 +155,20 @@ class MetalensOptimizer:
                                  radial_pos: float, 
                                  phase_req: float) -> Tuple[float, float]:
         """
-        计算单个分段的光学响应
+        Calculate optical response for a single segment
         
         Args:
-            segment_idx: 分段索引
-            radial_pos: 径向位置
-            phase_req: 所需相位
+            segment_idx: Segment index
+            radial_pos: Radial position
+            phase_req: Required phase
             
         Returns:
-            (实际相位, 实际透射率)
+            (actual phase, actual transmittance)
         """
-        # 生成控制点
+        # Generate control points
         control_points = self.generate_segment_control_points(segment_idx, radial_pos, phase_req)
         
-        # 预测光学响应
+        # Predict optical response
         actual_phase, actual_transmittance = self.predict_optical_response(control_points)
         
         return actual_phase, actual_transmittance
@@ -177,23 +177,23 @@ class MetalensOptimizer:
                                  phase_profile: np.ndarray, 
                                  transmittance_profile: np.ndarray) -> float:
         """
-        计算聚焦效率
+        Calculate focusing efficiency
         
         Args:
-            phase_profile: 实际相位分布
-            transmittance_profile: 实际透射率分布
+            phase_profile: Actual phase distribution
+            transmittance_profile: Actual transmittance distribution
             
         Returns:
-            聚焦效率
+            Focusing efficiency
         """
-        # 计算理想相位分布
+        # Calculate ideal phase distribution
         radial_positions = np.linspace(0, self.lens_radius, self.n_segments)
         ideal_phase = self.ideal_phase_profile(radial_positions)
         
-        # 计算相位误差
+        # Calculate phase error
         phase_error = np.abs(ideal_phase - phase_profile)
         
-        # 计算加权效率（考虑透射率）
+        # Calculate weighted efficiency (considering transmittance)
         efficiency = np.mean(transmittance_profile * np.cos(phase_error/2)**2)
         
         return efficiency
@@ -202,54 +202,54 @@ class MetalensOptimizer:
                                  max_iterations: int = 50, 
                                  learning_rate: float = 0.1) -> Tuple[np.ndarray, np.ndarray, List[float]]:
         """
-        单波长优化
+        Single wavelength optimization
         
         Args:
-            max_iterations: 最大迭代次数
-            learning_rate: 学习率
+            max_iterations: Maximum number of iterations
+            learning_rate: Learning rate
             
         Returns:
-            (最优相位分布, 最优透射率分布, 效率历史)
+            (optimal phase distribution, optimal transmittance distribution, efficiency history)
         """
-        print("开始单波长超透镜优化...")
+        print("Starting single wavelength metalens optimization...")
         
-        # 初始化相位和透射率分布
+        # Initialize phase and transmittance distributions
         radial_positions = np.linspace(0.1*self.lens_radius, self.lens_radius, self.n_segments)
         ideal_phase = self.ideal_phase_profile(radial_positions)
         
-        # 初始猜测 - 接近理想值
+        # Initial guess - close to ideal values
         current_phase = ideal_phase + np.random.uniform(-0.2, 0.2, self.n_segments)
-        current_transmittance = np.ones(self.n_segments) * 0.8  # 初始透射率
+        current_transmittance = np.ones(self.n_segments) * 0.8  # Initial transmittance
         
         efficiency_history = []
         
         for iteration in range(max_iterations):
-            print(f"迭代 {iteration + 1}/{max_iterations}")
+            print(f"Iteration {iteration + 1}/{max_iterations}")
             
-            # 更新每个分段
+            # Update each segment
             new_phase = current_phase.copy()
             new_transmittance = current_transmittance.copy()
             
             for i in range(self.n_segments):
-                # 计算当前分段的响应
+                # Calculate response for current segment
                 actual_phase, actual_transmittance = self.calculate_segment_response(
                     i, radial_positions[i], ideal_phase[i]
                 )
                 
-                # 更新估计值
+                # Update estimated values
                 new_phase[i] = actual_phase
                 new_transmittance[i] = actual_transmittance
             
             current_phase = new_phase
             current_transmittance = new_transmittance
             
-            # 计算当前效率
+            # Calculate current efficiency
             current_efficiency = self.calculate_focus_efficiency(current_phase, current_transmittance)
             efficiency_history.append(current_efficiency)
             
-            print(f"  当前聚焦效率: {current_efficiency:.4f}")
+            print(f"  Current focusing efficiency: {current_efficiency:.4f}")
         
-        print(f"优化完成! 最终聚焦效率: {efficiency_history[-1]:.4f}")
+        print(f"Optimization complete! Final focusing efficiency: {efficiency_history[-1]:.4f}")
         
         return current_phase, current_transmittance, efficiency_history
     
@@ -259,7 +259,7 @@ class MetalensOptimizer:
                     efficiency_history: List[float],
                     radial_positions: Optional[np.ndarray] = None):
         """
-        绘制优化结果
+        Plot optimization results
         """
         if radial_positions is None:
             radial_positions = np.linspace(0.1*self.lens_radius, self.lens_radius, self.n_segments)
@@ -268,35 +268,35 @@ class MetalensOptimizer:
         
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         
-        # 相位分布对比
-        axes[0, 0].plot(radial_positions*1e6, ideal_phase, 'r--', label='理想相位', linewidth=2)
-        axes[0, 0].plot(radial_positions*1e6, phase_profile, 'b-', label='实际相位', linewidth=2)
-        axes[0, 0].set_xlabel('径向位置 (μm)')
-        axes[0, 0].set_ylabel('相位 (弧度)')
-        axes[0, 0].set_title('相位分布对比')
+        # Phase distribution comparison
+        axes[0, 0].plot(radial_positions*1e6, ideal_phase, 'r--', label='Ideal Phase', linewidth=2)
+        axes[0, 0].plot(radial_positions*1e6, phase_profile, 'b-', label='Actual Phase', linewidth=2)
+        axes[0, 0].set_xlabel('Radial Position (μm)')
+        axes[0, 0].set_ylabel('Phase (radians)')
+        axes[0, 0].set_title('Phase Distribution Comparison')
         axes[0, 0].legend()
         axes[0, 0].grid(True, alpha=0.3)
         
-        # 透射率分布
+        # Transmittance distribution
         axes[0, 1].plot(radial_positions*1e6, transmittance_profile, 'g-', linewidth=2)
-        axes[0, 1].set_xlabel('径向位置 (μm)')
-        axes[0, 1].set_ylabel('透射率')
-        axes[0, 1].set_title('透射率分布')
+        axes[0, 1].set_xlabel('Radial Position (μm)')
+        axes[0, 1].set_ylabel('Transmittance')
+        axes[0, 1].set_title('Transmittance Distribution')
         axes[0, 1].grid(True, alpha=0.3)
         
-        # 相位误差
+        # Phase error
         phase_error = np.abs(ideal_phase - phase_profile)
         axes[1, 0].plot(radial_positions*1e6, phase_error, 'm-', linewidth=2)
-        axes[1, 0].set_xlabel('径向位置 (μm)')
-        axes[1, 0].set_ylabel('相位误差 (弧度)')
-        axes[1, 0].set_title('相位误差分布')
+        axes[1, 0].set_xlabel('Radial Position (μm)')
+        axes[1, 0].set_ylabel('Phase Error (radians)')
+        axes[1, 0].set_title('Phase Error Distribution')
         axes[1, 0].grid(True, alpha=0.3)
         
-        # 效率历史
+        # Efficiency history
         axes[1, 1].plot(efficiency_history, 'c-', linewidth=2)
-        axes[1, 1].set_xlabel('迭代次数')
-        axes[1, 1].set_ylabel('聚焦效率')
-        axes[1, 1].set_title('优化收敛过程')
+        axes[1, 1].set_xlabel('Iteration')
+        axes[1, 1].set_ylabel('Focusing Efficiency')
+        axes[1, 1].set_title('Optimization Convergence')
         axes[1, 1].grid(True, alpha=0.3)
         
         plt.tight_layout()
@@ -308,14 +308,14 @@ class MetalensOptimizer:
                               transmittance_profile: np.ndarray,
                               radial_positions: Optional[np.ndarray] = None) -> dict:
         """
-        生成设计摘要
+        Generate design summary
         """
         if radial_positions is None:
             radial_positions = np.linspace(0.1*self.lens_radius, self.lens_radius, self.n_segments)
         
         ideal_phase = self.ideal_phase_profile(radial_positions)
         
-        # 计算各种指标
+        # Calculate various metrics
         phase_error = np.abs(ideal_phase - phase_profile)
         avg_phase_error = np.mean(phase_error)
         max_phase_error = np.max(phase_error)
@@ -341,43 +341,43 @@ class MetalensOptimizer:
 
 
 def main():
-    """主函数 - 演示超透镜优化"""
-    print("DFLAT风格超透镜优化器")
+    """Main function - Demonstrate metalens optimization"""
+    print("DFLAT-Style Metalens Optimizer")
     print("="*50)
     
-    # 创建优化器实例
+    # Create optimizer instance
     optimizer = MetalensOptimizer(
-        n_segments=32,  # 减少分段数以加快演示
+        n_segments=32,  # Reduce segment count to speed up demo
         focal_length=50e-6,
         wavelength=532e-9,
         lens_radius=50e-6
     )
     
-    # 执行优化
+    # Execute optimization
     phase_profile, transmittance_profile, efficiency_history = optimizer.optimize_single_wavelength(
-        max_iterations=20  # 减少迭代次数以加快演示
+        max_iterations=20  # Reduce iterations to speed up demo
     )
     
-    # 生成径向位置
+    # Generate radial positions
     radial_positions = np.linspace(0.1*optimizer.lens_radius, optimizer.lens_radius, optimizer.n_segments)
     
-    # 绘制结果
+    # Plot results
     optimizer.plot_results(phase_profile, transmittance_profile, efficiency_history, radial_positions)
     
-    # 生成设计摘要
+    # Generate design summary
     summary = optimizer.generate_design_summary(phase_profile, transmittance_profile, radial_positions)
     
-    print("\n设计摘要:")
-    print(f"焦距: {summary['focal_length']*1e6:.1f} μm")
-    print(f"波长: {summary['wavelength']*1e9:.1f} nm")
-    print(f"透镜半径: {summary['lens_radius']*1e6:.1f} μm")
-    print(f"分段数: {summary['n_segments']}")
-    print(f"平均相位误差: {summary['avg_phase_error']:.4f} 弧度")
-    print(f"最大相位误差: {summary['max_phase_error']:.4f} 弧度")
-    print(f"平均透射率: {summary['avg_transmittance']:.4f}")
-    print(f"聚焦效率: {summary['focusing_efficiency']:.4f}")
+    print("\nDesign Summary:")
+    print(f"Focal length: {summary['focal_length']*1e6:.1f} μm")
+    print(f"Wavelength: {summary['wavelength']*1e9:.1f} nm")
+    print(f"Lens radius: {summary['lens_radius']*1e6:.1f} μm")
+    print(f"Number of segments: {summary['n_segments']}")
+    print(f"Average phase error: {summary['avg_phase_error']:.4f} radians")
+    print(f"Maximum phase error: {summary['max_phase_error']:.4f} radians")
+    print(f"Average transmittance: {summary['avg_transmittance']:.4f}")
+    print(f"Focusing efficiency: {summary['focusing_efficiency']:.4f}")
     
-    print("\n优化完成! 结果已保存到 'metalens_optimization_results.png'")
+    print("\nOptimization complete! Results saved to 'metalens_optimization_results.png'")
 
 
 if __name__ == "__main__":
