@@ -90,13 +90,13 @@ class NURBSTransformer(nn.Module):
         # Input projection
         x = self.input_projection(x)  # (batch_size, n_points, d_model)
         
-        # Add positional encoding
+        # Add positional encoding (need to transpose for pos_encoder, then transpose back)
         x = x.transpose(0, 1)  # (n_points, batch_size, d_model)
         x = self.pos_encoder(x)
+        x = x.transpose(0, 1)  # (batch_size, n_points, d_model) - back to batch_first
         
-        # Transformer encoding
-        x = self.transformer_encoder(x)  # (n_points, batch_size, d_model)
-        x = x.transpose(0, 1)  # (batch_size, n_points, d_model)
+        # Transformer encoding (batch_first=True)
+        x = self.transformer_encoder(x)  # (batch_size, n_points, d_model)
         
         # Flatten features
         x = x.reshape(batch_size, -1)  # (batch_size, n_points * d_model)
@@ -200,7 +200,7 @@ class NURBSTransformerModel:
         self.optimizer = optim.AdamW(self.model.parameters(), lr=0.001, weight_decay=1e-4)
         self.criterion = nn.MSELoss()
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min', factor=0.5, patience=10, verbose=True
+            self.optimizer, mode='min', factor=0.5, patience=10
         )
         
         self.train_losses = []
@@ -274,9 +274,13 @@ class NURBSTransformerModel:
         self.model.eval()
         with torch.no_grad():
             if isinstance(control_points, np.ndarray):
-                control_points = torch.FloatTensor(control_points).unsqueeze(0)  # Add batch dimension
-            control_points = control_points.to(self.device)
+                control_points = torch.FloatTensor(control_points)
             
+            # Ensure correct shape (batch_size, n_control_points, 2)
+            if control_points.dim() == 2:
+                control_points = control_points.unsqueeze(0)  # Add batch dimension
+            
+            control_points = control_points.to(self.device)
             outputs = self.model(control_points)
             return outputs.cpu().numpy()
     

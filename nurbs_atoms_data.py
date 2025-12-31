@@ -22,18 +22,19 @@ def sort_points_ccw(points):
 class Simulation:
     def __init__(self, control_points = np.array([(0.18,0),(0.16,0.16),(0,0.18),(-0.16,0.16),(-0.18,0),(-0.16,-0.16),(0,-0.16),(0.16,-0.16)]), target_phase = 0):
         self.control_points = control_points  # (N,2) control point coordinates
-        self.um = 1e-6
+        # Meep uses a length unit; we choose 1 unit = 1 μm
+        self.a = 1.0  # length unit in μm
         self.knots = np.array([0,0,0,1,2,3,4,5,6,7,7,7])
         self.edge_indices = [[0,1,2],[2,3,4],[4,5,6],[6,7,0]]
         self.setup_simulation()
         self.target_phase = target_phase
         self.pts = np.vstack([self.control_points,self.control_points[0]])
         # Initialize Meep simulation parameters
-        self.resolution = 50  # Increase resolution for more accurate results
-        # Set simulation domain size (x, y, z) - match original code dimensions
-        self.cell_size = mp.Vector3(0.36e-6, 0.36e-6, 2e-6)  
+        self.resolution = 50  # pixels per μm
+        # Set simulation domain size (x, y, z) in μm
+        self.cell_size = mp.Vector3(0.5, 0.5, 3.0)  # 0.5μm x 0.5μm x 3μm
         # Set PML layers - add PML in z direction, use periodic boundaries for x and y
-        self.pml_layers = [mp.PML(0.2e-6, direction=mp.Z)]  # PML thickness
+        self.pml_layers = [mp.PML(0.5, direction=mp.Z)]  # PML thickness 0.5 μm
         self.geometry = []
         self.sources = []
         self.monitors = []
@@ -64,12 +65,12 @@ class Simulation:
         # Generate complete NURBS curve, simulating original Lumerical script
         nurbs_points = self.generate_complete_nurbs_curve(points)
         
-        # Convert points to Meep Vector3 format
-        meep_vertices = [mp.Vector3(p[0]*self.um, p[1]*self.um, 0) for p in nurbs_points]
+        # Convert points to Meep Vector3 format (control points are in μm already)
+        meep_vertices = [mp.Vector3(p[0], p[1], 0) for p in nurbs_points]
         
         # Create polygon structure - TiO2 meta atom
-        tio2_height = 0.6 * self.um  # Height (0.6 μm)
-        tio2_center = mp.Vector3(0, 0, 0.3 * self.um)  # z-direction center position (0.3 μm)
+        tio2_height = 0.6  # Height 0.6 μm
+        tio2_center = mp.Vector3(0, 0, 0.3)  # z-direction center position 0.3 μm
         
         # To avoid self-intersection, sort vertices (sort by angle to form simple polygon)
         sorted_vertices = self.sort_vertices_ccw(meep_vertices)
@@ -82,10 +83,10 @@ class Simulation:
             material=self.TiO2_material
         )
         
-        # Substrate (SiO2) - thickness 10 μm, located at z=-5 μm (i.e., z from -10 μm to 0 μm)
+        # Substrate (SiO2) - located below z=0
         substrate = mp.Block(
-            size=mp.Vector3(mp.inf, mp.inf, 10e-6),
-            center=mp.Vector3(0, 0, -5e-6),  # Center at z=-5 μm
+            size=mp.Vector3(mp.inf, mp.inf, 1.0),
+            center=mp.Vector3(0, 0, -0.5),  # Center at z=-0.5 μm
             material=mp.Medium(epsilon=2.25)  # SiO2 permittivity is approximately 2.25
         )
         
@@ -157,7 +158,7 @@ class Simulation:
             return vertices
             
         # Convert to numpy array for processing
-        pts = np.array([[v.x/self.um, v.y/self.um] for v in vertices])  # Convert back to unitless coordinates
+        pts = np.array([[v.x, v.y] for v in vertices])  # Already in μm
         
         if len(pts) < 2:
             return vertices
@@ -172,14 +173,14 @@ class Simulation:
         sorted_indices = np.argsort(angles)
         sorted_pts = pts[sorted_indices]
         
-        # Convert back to Meep Vector3 format (with units)
-        return [mp.Vector3(pt[0]*self.um, pt[1]*self.um, 0) for pt in sorted_pts]
+        # Convert back to Meep Vector3 format
+        return [mp.Vector3(pt[0], pt[1], 0) for pt in sorted_pts]
 
     def run_forward(self, wavelength_start=400e-9, wavelength_stop=700e-9):
         """Run forward simulation"""
         # Convert wavelength units (from meters to micrometers)
-        wavelength_start_um = wavelength_start / self.um
-        wavelength_stop_um = wavelength_stop / self.um
+        wavelength_start_um = wavelength_start * 1e6  # Convert m to μm
+        wavelength_stop_um = wavelength_stop * 1e6    # Convert m to μm
         
         # Set frequency range
         freq_min = 1/wavelength_stop_um  # Frequency = c/lambda (c=1 in natural units)
@@ -187,16 +188,20 @@ class Simulation:
         freq_center = (freq_min + freq_max) / 2
         freq_span = freq_max - freq_min
         
-        # Calculate number of frequency points
-        frequency_points = int((wavelength_stop-wavelength_start)/(1e-9)) + 2
+        # Handle single wavelength case (avoid division by zero)
+        if freq_span == 0:
+            freq_span = freq_center * 0.1  # Use 10% of center frequency as bandwidth
         
-        # Set light source - plane wave incident from below (corresponds to source in original code)
+        # Calculate number of frequency points
+        frequency_points = max(int((wavelength_stop-wavelength_start)/(1e-9)) + 2, 3)
+        
+        # Set light source - plane wave incident from below
         self.sources = [
             mp.Source(
                 src=mp.GaussianSource(freq_center, fwidth=freq_span/4),
                 component=mp.Ex,  # x-direction polarization
-                center=mp.Vector3(0, 0, -0.5e-6),  # Position corresponds to original code
-                size=mp.Vector3(5e-6, 5e-6, 0)  # Source size
+                center=mp.Vector3(0, 0, -0.8),  # Source at z=-0.8 μm
+                size=mp.Vector3(0.5, 0.5, 0)  # Source size matches cell
             )
         ]
         
@@ -210,14 +215,14 @@ class Simulation:
             dimensions=3
         )
         
-        # Add transmission monitor (corresponds to "T" monitor in original code)
+        # Add transmission monitor
         tran_region = mp.FluxRegion(
-            center=mp.Vector3(0, 0, 0.8e-6),  # Transmission plane position (z=0.8 μm)
-            size=mp.Vector3(1.04e-6, 1.04e-6, 0)  # Monitor size (1.04 μm × 1.04 μm)
+            center=mp.Vector3(0, 0, 0.8),  # Transmission plane at z=0.8 μm
+            size=mp.Vector3(0.4, 0.4, 0)  # Monitor size
         )
         
-        # Add phase monitor (corresponds to "phase" monitor in original code)
-        phase_monitor_center = mp.Vector3(0, 0, 0.8e-6)  # Phase monitor position
+        # Add phase monitor
+        phase_monitor_center = mp.Vector3(0, 0, 0.8)  # Phase monitor at z=0.8 μm
         
         # Add monitors
         tran_mon = self.sim.add_flux(freq_center, freq_span/4, frequency_points, tran_region)
