@@ -1,6 +1,6 @@
 """
-测试NURBS超表面单元仿真脚本
-使用Meep进行FDTD仿真，计算相位和透射率，并可视化电场分布
+Test NURBS metasurface unit cell simulation script
+Uses Meep for FDTD simulation, calculates phase and transmittance, and visualizes field distribution
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,25 +9,26 @@ from nurbs_atoms_data import Simulation
 
 def create_test_control_points():
     """
-    创建一个合理的四段NURBS曲线控制点
+    Create reasonable control points for a 4-segment NURBS curve
     
-    四段NURBS曲线由8个控制点定义，每段使用3个控制点（相邻段共享端点）
-    控制点分布在单元格内，形成一个类似圆角矩形的形状
+    4-segment NURBS curve is defined by 8 control points, each segment uses 3 control points
+    (adjacent segments share endpoints)
+    Control points are distributed within the unit cell, forming a rounded rectangle shape
     
-    单元格大小: 0.5μm x 0.5μm
-    控制点范围: 约 ±0.18μm (确保结构在单元格内)
+    Unit cell size: 0.5um x 0.5um
+    Control point range: approximately +/-0.18um (ensure structure fits in cell)
     """
-    # 定义8个控制点，形成一个略微不对称的形状以产生有趣的相位响应
-    # 控制点按逆时针排列
+    # Define 8 control points forming a slightly asymmetric shape for interesting phase response
+    # Control points arranged counter-clockwise
     control_points = np.array([
-        (0.16, 0.02),    # 点0: 右侧中部偏上
-        (0.14, 0.14),    # 点1: 右上角
-        (0.02, 0.16),    # 点2: 上侧中部偏右
-        (-0.14, 0.14),   # 点3: 左上角
-        (-0.16, -0.02),  # 点4: 左侧中部偏下
-        (-0.14, -0.14),  # 点5: 左下角
-        (-0.02, -0.16),  # 点6: 下侧中部偏左
-        (0.14, -0.14)    # 点7: 右下角
+        (0.16, 0.02),    # Point 0: right side, slightly above center
+        (0.14, 0.14),    # Point 1: upper right corner
+        (0.02, 0.16),    # Point 2: top side, slightly right of center
+        (-0.14, 0.14),   # Point 3: upper left corner
+        (-0.16, -0.02),  # Point 4: left side, slightly below center
+        (-0.14, -0.14),  # Point 5: lower left corner
+        (-0.02, -0.16),  # Point 6: bottom side, slightly left of center
+        (0.14, -0.14)    # Point 7: lower right corner
     ])
     
     return control_points
@@ -35,80 +36,80 @@ def create_test_control_points():
 
 def run_simulation_and_visualize(control_points, wavelength_nm=550):
     """
-    运行仿真并可视化结果
+    Run simulation and visualize results
     
-    参数:
-        control_points: (8,2) 数组，NURBS控制点坐标 (单位: μm)
-        wavelength_nm: 波长 (单位: nm)
+    Args:
+        control_points: (8,2) array, NURBS control point coordinates (unit: um)
+        wavelength_nm: wavelength (unit: nm)
     
-    返回:
-        transmittance: 透射率
-        phase: 相位 (弧度)
+    Returns:
+        transmittance: transmittance
+        phase: phase (radians)
     """
     print("=" * 60)
-    print("NURBS超表面单元仿真测试")
+    print("NURBS Metasurface Unit Cell Simulation Test")
     print("=" * 60)
     
-    # 1. 显示控制点信息
-    print("\n1. 控制点坐标 (单位: μm):")
+    # 1. Display control point information
+    print("\n1. Control point coordinates (unit: um):")
     for i, pt in enumerate(control_points):
-        print(f"   点{i}: ({pt[0]:.3f}, {pt[1]:.3f})")
+        print(f"   Point {i}: ({pt[0]:.3f}, {pt[1]:.3f})")
     
-    # 2. 创建仿真对象
-    print(f"\n2. 创建仿真对象...")
+    # 2. Create simulation object
+    print(f"\n2. Creating simulation object...")
     sim_obj = Simulation(control_points=control_points)
     
-    # 显示仿真参数
-    print(f"   单元格大小: {sim_obj.cell_size}")
-    print(f"   分辨率: {sim_obj.resolution} pixels/μm")
-    print(f"   TiO2介电常数: {sim_obj.TiO2_material.epsilon_diag.x}")
-    print(f"   波长: {wavelength_nm} nm")
+    # Display simulation parameters
+    print(f"   Cell size: {sim_obj.cell_size}")
+    print(f"   Resolution: {sim_obj.resolution} pixels/um")
+    print(f"   TiO2 permittivity: {sim_obj.TiO2_material.epsilon_diag.x}")
+    print(f"   Wavelength: {wavelength_nm} nm")
     
-    # 3. 可视化NURBS曲线形状
-    print(f"\n3. 生成NURBS曲线...")
+    # 3. Visualize NURBS curve shape
+    print(f"\n3. Generating NURBS curve...")
     nurbs_points = sim_obj.generate_complete_nurbs_curve(control_points)
-    print(f"   生成了 {len(nurbs_points)} 个曲线采样点")
+    print(f"   Generated {len(nurbs_points)} curve sample points")
     
-    # 4. 运行仿真
-    print(f"\n4. 运行FDTD仿真...")
-    print(f"   首先运行参考仿真（无结构）进行归一化...")
+    # 4. Run simulation
+    print(f"\n4. Running FDTD simulation...")
+    print(f"   First running reference simulation (no structure) for normalization...")
     wavelength_m = wavelength_nm * 1e-9
     transmittance, phase = sim_obj.run_forward(
         wavelength_start=wavelength_m, 
         wavelength_stop=wavelength_m,
-        normalize=True  # 启用归一化
+        normalize=True  # Enable normalization
     )
     
-    print(f"\n5. 仿真结果:")
-    print(f"   归一化透射率: {transmittance:.4f} ({transmittance*100:.2f}%)")
-    print(f"   相对相位: {phase:.4f} rad ({np.degrees(phase):.2f}°)")
+    print(f"\n5. Simulation results:")
+    print(f"   Normalized transmittance: {transmittance:.4f} ({transmittance*100:.2f}%)")
+    print(f"   Relative phase: {phase:.4f} rad ({np.degrees(phase):.2f} deg)")
     
-    # 6. 获取电场分布数据
-    print(f"\n6. 提取电场分布数据...")
+    # 6. Extract field distribution data
+    print(f"\n6. Extracting field distribution data...")
     
-    # 获取不同截面的电场
-    # XZ平面 (y=0) - 侧视图
+    # Get field at different cross-sections
+    # XZ plane (y=0) - side view
     xz_field = sim_obj.sim.get_array(
         center=mp.Vector3(0, 0, 0), 
         size=mp.Vector3(0.5, 0, 3.0), 
         component=mp.Ex
     )
     
-    # XY平面 (z=0.3μm) - 穿过超原子的截面
+    # XY plane (z=0.3um) - cross-section through meta-atom
     xy_field_meta = sim_obj.sim.get_array(
         center=mp.Vector3(0, 0, 0.3), 
         size=mp.Vector3(0.5, 0.5, 0), 
         component=mp.Ex
     )
     
-    # XY平面 (z=0.8μm) - 超原子上方的截面
+    # XY plane (z=0.8um) - cross-section above meta-atom
     xy_field_above = sim_obj.sim.get_array(
         center=mp.Vector3(0, 0, 0.8), 
         size=mp.Vector3(0.5, 0.5, 0), 
         component=mp.Ex
     )
     
-    # 获取介电常数分布（用于显示结构）
+    # Get permittivity distribution (for displaying structure)
     eps_xz = sim_obj.sim.get_array(
         center=mp.Vector3(0, 0, 0), 
         size=mp.Vector3(0.5, 0, 3.0), 
@@ -121,12 +122,12 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
         component=mp.Dielectric
     )
     
-    # 7. 创建可视化图表
-    print(f"\n7. 生成可视化图表...")
+    # 7. Create visualization plots
+    print(f"\n7. Generating visualization plots...")
     
     fig = plt.figure(figsize=(16, 12))
     
-    # 子图1: NURBS曲线和控制点
+    # Subplot 1: NURBS curve and control points
     ax1 = fig.add_subplot(2, 3, 1)
     nurbs_x = [p[0] for p in nurbs_points] + [nurbs_points[0][0]]
     nurbs_y = [p[1] for p in nurbs_points] + [nurbs_points[0][1]]
@@ -145,7 +146,7 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
     ax1.set_xlim(-0.25, 0.25)
     ax1.set_ylim(-0.25, 0.25)
     
-    # 子图2: XZ截面电场分布
+    # Subplot 2: XZ cross-section field distribution
     ax2 = fig.add_subplot(2, 3, 2)
     extent_xz = [-0.25, 0.25, -1.5, 1.5]
     vmax_xz = np.max(np.abs(xz_field)) if np.max(np.abs(xz_field)) > 0 else 1
@@ -160,7 +161,7 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
     ax2.set_title('Ex Field - XZ Plane (y=0)')
     plt.colorbar(im2, ax=ax2, label='Ex')
     
-    # 子图3: XY截面电场分布（穿过超原子）
+    # Subplot 3: XY cross-section field distribution (through meta-atom)
     ax3 = fig.add_subplot(2, 3, 3)
     extent_xy = [-0.25, 0.25, -0.25, 0.25]
     vmax_xy = np.max(np.abs(xy_field_meta)) if np.max(np.abs(xy_field_meta)) > 0 else 1
@@ -173,7 +174,7 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
     ax3.set_title('Ex Field - XY Plane (z=0.3um, through meta-atom)')
     plt.colorbar(im3, ax=ax3, label='Ex')
     
-    # 子图4: XY截面电场分布（超原子上方）
+    # Subplot 4: XY cross-section field distribution (above meta-atom)
     ax4 = fig.add_subplot(2, 3, 4)
     vmax_above = np.max(np.abs(xy_field_above)) if np.max(np.abs(xy_field_above)) > 0 else 1
     im4 = ax4.imshow(np.real(xy_field_above).T, cmap='RdBu', extent=extent_xy,
@@ -183,7 +184,7 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
     ax4.set_title('Ex Field - XY Plane (z=0.8um, above meta-atom)')
     plt.colorbar(im4, ax=ax4, label='Ex')
     
-    # 子图5: 介电常数分布
+    # Subplot 5: Permittivity distribution
     ax5 = fig.add_subplot(2, 3, 5)
     im5 = ax5.imshow(eps_xy.T, cmap='Blues', extent=extent_xy,
                      aspect='equal', origin='lower')
@@ -192,7 +193,7 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
     ax5.set_title('Dielectric Distribution (z=0.3um)')
     plt.colorbar(im5, ax=ax5, label='epsilon')
     
-    # 子图6: 仿真结果文本
+    # Subplot 6: Simulation results text
     ax6 = fig.add_subplot(2, 3, 6)
     ax6.axis('off')
     result_text = f"""
@@ -233,11 +234,11 @@ def run_simulation_and_visualize(control_points, wavelength_nm=550):
 
 
 def main():
-    """主函数"""
-    # 创建测试控制点
+    """Main function"""
+    # Create test control points
     control_points = create_test_control_points()
     
-    # 运行仿真并可视化
+    # Run simulation and visualize
     transmittance, phase, sim_obj = run_simulation_and_visualize(
         control_points, 
         wavelength_nm=550
@@ -252,4 +253,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

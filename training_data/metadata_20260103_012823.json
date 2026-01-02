@@ -1,0 +1,21 @@
+{
+  "num_samples": 10,
+  "wavelength_nm": 550,
+  "timestamp": "20260103_012823",
+  "cell_size_um": 0.5,
+  "min_radius_um": 0.05,
+  "max_radius_um": 0.22,
+  "min_feature_size_um": 0.03,
+  "transmittance_stats": {
+    "mean": 0.8964688171689833,
+    "std": 0.15618510790664472,
+    "min": 0.5339184373444557,
+    "max": 1.0
+  },
+  "phase_stats": {
+    "mean": -0.27843212206014123,
+    "std": 1.382900562081109,
+    "min": -2.7967769652084415,
+    "max": 1.5207510508478166
+  }
+}

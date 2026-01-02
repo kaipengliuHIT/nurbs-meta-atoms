@@ -6,7 +6,7 @@ import math
 import random
 import meep as mp
 
-# 全局缓存参考通量（用于归一化透射率）
+# Global cache for reference flux (for normalizing transmittance)
 _reference_flux_cache = {}
 
 
@@ -14,7 +14,7 @@ def sort_points_ccw(points):
     """Sort coordinate points counter-clockwise around the origin"""
     def angle_from_positive_x(point):
         x, y = point
-        # Calculate polar angle (radians) and convert result to [0, 2π) range
+        # Calculate polar angle (radians) and convert result to [0, 2pi) range
         angle = math.atan2(y, x)
         return angle if angle >= 0 else angle + 2 * math.pi
     
@@ -24,20 +24,30 @@ def sort_points_ccw(points):
 
 def get_reference_flux(freq_center, freq_span, frequency_points, resolution=50, run_time=200):
     """
-    获取参考通量（无结构时的入射通量），用于归一化透射率
-    使用缓存避免重复计算
+    Get reference flux (incident flux without structure) for normalizing transmittance
+    Uses caching to avoid repeated calculations
+    
+    Args:
+        freq_center: center frequency
+        freq_span: frequency span
+        frequency_points: number of frequency points
+        resolution: simulation resolution (pixels per um)
+        run_time: simulation run time
+    
+    Returns:
+        dict: reference data containing flux, phase, and complex field
     """
-    # 创建缓存键
+    # Create cache key
     cache_key = (round(freq_center, 6), round(freq_span, 6), frequency_points, resolution)
     
     if cache_key in _reference_flux_cache:
         return _reference_flux_cache[cache_key]
     
-    # 创建参考仿真（只有基底，没有超原子结构）
+    # Create reference simulation (only substrate, no meta-atom structure)
     cell_size = mp.Vector3(0.5, 0.5, 3.0)
     pml_layers = [mp.PML(0.5, direction=mp.Z)]
     
-    # 只有SiO2基底
+    # Only SiO2 substrate
     geometry = [
         mp.Block(
             size=mp.Vector3(mp.inf, mp.inf, 1.0),
@@ -64,25 +74,25 @@ def get_reference_flux(freq_center, freq_span, frequency_points, resolution=50, 
         dimensions=3
     )
     
-    # 添加通量监视器
+    # Add flux monitor
     tran_region = mp.FluxRegion(
         center=mp.Vector3(0, 0, 0.8),
         size=mp.Vector3(0.4, 0.4, 0)
     )
     tran_mon = sim_ref.add_flux(freq_center, freq_span, frequency_points, tran_region)
     
-    # 添加相位参考监视器
+    # Add phase reference monitor
     phase_monitor_center = mp.Vector3(0, 0, 0.8)
     dft_ex_ref = sim_ref.add_dft_fields([mp.Ex], freq_center, freq_span, frequency_points,
                                          center=phase_monitor_center, size=mp.Vector3(0, 0, 0))
     
-    # 运行参考仿真
+    # Run reference simulation
     sim_ref.run(until=run_time)
     
-    # 获取参考通量和相位
+    # Get reference flux and phase
     ref_flux = mp.get_fluxes(tran_mon)
     
-    # 获取参考相位
+    # Get reference phase
     try:
         ex_dft_ref = sim_ref.get_dft_array(dft_ex_ref, mp.Ex, 0)
         if np.isscalar(ex_dft_ref) or ex_dft_ref.size == 1:
@@ -95,7 +105,7 @@ def get_reference_flux(freq_center, freq_span, frequency_points, resolution=50, 
         ref_phase = 0.0
         ref_ex_complex = 1.0
     
-    # 缓存结果
+    # Cache result
     result = {
         'flux': ref_flux,
         'phase': ref_phase,
@@ -103,34 +113,39 @@ def get_reference_flux(freq_center, freq_span, frequency_points, resolution=50, 
     }
     _reference_flux_cache[cache_key] = result
     
-    # 清理
+    # Cleanup
     sim_ref.reset_meep()
     
     return result
 
 
 class Simulation:
+    """
+    NURBS metasurface unit cell simulation class
+    
+    Uses Meep FDTD to simulate electromagnetic response of NURBS-defined meta-atoms
+    """
     def __init__(self, control_points=np.array([(0.18,0),(0.16,0.16),(0,0.18),(-0.16,0.16),(-0.18,0),(-0.16,-0.16),(0,-0.16),(0.16,-0.16)]), target_phase=0):
         self.control_points = control_points  # (N,2) control point coordinates
-        # Meep uses a length unit; we choose 1 unit = 1 μm
-        self.a = 1.0  # length unit in μm
+        # Meep uses a length unit; we choose 1 unit = 1 um
+        self.a = 1.0  # length unit in um
         self.knots = np.array([0,0,0,1,2,3,4,5,6,7,7,7])
         self.edge_indices = [[0,1,2],[2,3,4],[4,5,6],[6,7,0]]
         self.setup_simulation()
         self.target_phase = target_phase
         self.pts = np.vstack([self.control_points, self.control_points[0]])
         # Initialize Meep simulation parameters
-        self.resolution = 50  # pixels per μm
-        # Set simulation domain size (x, y, z) in μm
-        self.cell_size = mp.Vector3(0.5, 0.5, 3.0)  # 0.5μm x 0.5μm x 3μm
+        self.resolution = 50  # pixels per um
+        # Set simulation domain size (x, y, z) in um
+        self.cell_size = mp.Vector3(0.5, 0.5, 3.0)  # 0.5um x 0.5um x 3um
         # Set PML layers - add PML in z direction, use periodic boundaries for x and y
-        self.pml_layers = [mp.PML(0.5, direction=mp.Z)]  # PML thickness 0.5 μm
+        self.pml_layers = [mp.PML(0.5, direction=mp.Z)]  # PML thickness 0.5 um
         self.geometry = []
         self.sources = []
         self.monitors = []
         self.sim = None
-        self.wavelength_start = 0.4  # μm
-        self.wavelength_stop = 0.7   # μm
+        self.wavelength_start = 0.4  # um
+        self.wavelength_stop = 0.7   # um
         # Define TiO2 material (using dispersion model for accuracy)
         self.TiO2_material = mp.Medium(epsilon=6.25)  # Relative permittivity
         self.phase = 0
@@ -138,10 +153,12 @@ class Simulation:
         self.generate_structure(self.control_points)
 
     def set_contral_points(self, control_points):
+        """Set new control points"""
         self.control_points = control_points
         self.pts = np.vstack([self.control_points, self.control_points[0]])
 
     def set_target_phase(self, target_phase):
+        """Set target phase for optimization"""
         self.target_phase = target_phase
         
     def setup_simulation(self):
@@ -151,16 +168,16 @@ class Simulation:
         # Periodic boundaries are default in Meep when PML is not set
 
     def generate_structure(self, points):
-        """Generate structure based on control points (nurbs meta atoms)"""
+        """Generate structure based on control points (NURBS meta-atoms)"""
         # Generate complete NURBS curve, simulating original Lumerical script
         nurbs_points = self.generate_complete_nurbs_curve(points)
         
-        # Convert points to Meep Vector3 format (control points are in μm already)
+        # Convert points to Meep Vector3 format (control points are in um already)
         meep_vertices = [mp.Vector3(p[0], p[1], 0) for p in nurbs_points]
         
-        # Create polygon structure - TiO2 meta atom
-        tio2_height = 0.6  # Height 0.6 μm
-        tio2_center = mp.Vector3(0, 0, 0.3)  # z-direction center position 0.3 μm
+        # Create polygon structure - TiO2 meta-atom
+        tio2_height = 0.6  # Height 0.6 um
+        tio2_center = mp.Vector3(0, 0, 0.3)  # z-direction center position 0.3 um
         
         # To avoid self-intersection, sort vertices (sort by angle to form simple polygon)
         sorted_vertices = self.sort_vertices_ccw(meep_vertices)
@@ -176,7 +193,7 @@ class Simulation:
         # Substrate (SiO2) - located below z=0
         substrate = mp.Block(
             size=mp.Vector3(mp.inf, mp.inf, 1.0),
-            center=mp.Vector3(0, 0, -0.5),  # Center at z=-0.5 μm
+            center=mp.Vector3(0, 0, -0.5),  # Center at z=-0.5 um
             material=mp.Medium(epsilon=2.25)  # SiO2 permittivity is approximately 2.25
         )
         
@@ -248,7 +265,7 @@ class Simulation:
             return vertices
             
         # Convert to numpy array for processing
-        pts = np.array([[v.x, v.y] for v in vertices])  # Already in μm
+        pts = np.array([[v.x, v.y] for v in vertices])  # Already in um
         
         if len(pts) < 2:
             return vertices
@@ -270,18 +287,18 @@ class Simulation:
         """
         Run forward simulation
         
-        参数:
-            wavelength_start: 起始波长 (m)
-            wavelength_stop: 终止波长 (m)
-            normalize: 是否归一化透射率（相对于无结构参考）
+        Args:
+            wavelength_start: start wavelength (m)
+            wavelength_stop: stop wavelength (m)
+            normalize: whether to normalize transmittance (relative to no-structure reference)
         
-        返回:
-            transmittance: 归一化透射率 (0-1)
-            phase: 相对相位 (rad)
+        Returns:
+            transmittance: normalized transmittance (0-1)
+            phase: relative phase (rad)
         """
         # Convert wavelength units (from meters to micrometers)
-        wavelength_start_um = wavelength_start * 1e6  # Convert m to μm
-        wavelength_stop_um = wavelength_stop * 1e6    # Convert m to μm
+        wavelength_start_um = wavelength_start * 1e6  # Convert m to um
+        wavelength_stop_um = wavelength_stop * 1e6    # Convert m to um
         
         # Set frequency range
         freq_min = 1/wavelength_stop_um  # Frequency = c/lambda (c=1 in natural units)
@@ -296,10 +313,10 @@ class Simulation:
         # Calculate number of frequency points
         frequency_points = max(int((wavelength_stop-wavelength_start)/(1e-9)) + 2, 3)
         
-        # 运行时间
+        # Run time
         run_time = 200
         
-        # 获取参考通量（用于归一化）
+        # Get reference flux (for normalization)
         if normalize:
             ref_data = get_reference_flux(freq_center, freq_span, frequency_points, 
                                           self.resolution, run_time)
@@ -309,7 +326,7 @@ class Simulation:
             mp.Source(
                 src=mp.GaussianSource(freq_center, fwidth=freq_span),
                 component=mp.Ex,  # x-direction polarization
-                center=mp.Vector3(0, 0, -0.8),  # Source at z=-0.8 μm
+                center=mp.Vector3(0, 0, -0.8),  # Source at z=-0.8 um
                 size=mp.Vector3(0.5, 0.5, 0)  # Source size matches cell
             )
         ]
@@ -326,12 +343,12 @@ class Simulation:
         
         # Add transmission monitor
         tran_region = mp.FluxRegion(
-            center=mp.Vector3(0, 0, 0.8),  # Transmission plane at z=0.8 μm
+            center=mp.Vector3(0, 0, 0.8),  # Transmission plane at z=0.8 um
             size=mp.Vector3(0.4, 0.4, 0)  # Monitor size
         )
         
         # Add phase monitor
-        phase_monitor_center = mp.Vector3(0, 0, 0.8)  # Phase monitor at z=0.8 μm
+        phase_monitor_center = mp.Vector3(0, 0, 0.8)  # Phase monitor at z=0.8 um
         
         # Add monitors
         tran_mon = self.sim.add_flux(freq_center, freq_span, frequency_points, tran_region)
@@ -347,13 +364,13 @@ class Simulation:
         # Get transmission flux
         raw_flux = mp.get_fluxes(tran_mon)[0] if mp.get_fluxes(tran_mon) else 0.0
         
-        # 归一化透射率
+        # Normalize transmittance
         if normalize and ref_data['flux'][0] != 0:
             self.Trans = raw_flux / ref_data['flux'][0]
         else:
             self.Trans = raw_flux
         
-        # 确保透射率在合理范围内
+        # Ensure transmittance is in valid range
         self.Trans = max(0.0, min(1.0, self.Trans))
         
         # Get phase information - using DFT monitor
@@ -368,9 +385,9 @@ class Simulation:
                 raw_phase = np.angle(ex_dft[0]) if len(ex_dft) > 0 else 0.0
                 ex_complex = complex(ex_dft[0]) if len(ex_dft) > 0 else 1.0
             
-            # 计算相对相位（相对于参考）
+            # Calculate relative phase (relative to reference)
             if normalize:
-                # 使用复数除法计算相对相位
+                # Use complex division to calculate relative phase
                 if abs(ref_data['ex_complex']) > 1e-10:
                     relative_complex = ex_complex / ref_data['ex_complex']
                     self.phase = np.angle(relative_complex)
@@ -391,7 +408,7 @@ class Simulation:
         return self.Trans, self.phase
     
     def reset(self):
-        """重置仿真对象，释放内存"""
+        """Reset simulation object to release memory"""
         if self.sim is not None:
             self.sim.reset_meep()
             self.sim = None
