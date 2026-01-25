@@ -38,71 +38,10 @@ nurbs-meta-atoms/
 └── training_data/                   # Training data directory
 ```
 
-## Model Architecture
-
-### Encoder-Decoder Transformer
-
-```
-Input NURBS Parameters → Binary Grid Encoder → Linear → Linear
-                                                  ↓
-                              ┌─────────────────────────────────────┐
-                              │         ENCODER (8 layers)          │
-                              │  Multi-Head Attention (12 heads)    │
-                              │  → Add & Norm → Feed Forward        │
-                              │  → Add & Norm                       │
-                              └─────────────────────────────────────┘
-                                                  ↓
-                              ┌─────────────────────────────────────┐
-                              │         DECODER (8 layers)          │
-                              │  Masked Multi-Head Attention        │
-                              │  → Add & Norm → Cross Attention     │
-                              │  → Add & Norm → Feed Forward        │
-                              │  → Add & Norm                       │
-                              └─────────────────────────────────────┘
-                                                  ↓
-                         ┌────────────────┬────────────────┐
-                         │  Optical Head  │  Gradient Head │
-                         │ (phase, amp)   │ (∂/∂params)    │
-                         └────────────────┴────────────────┘
-```
-
-### Key Features
-- **Binary Encoded Grid Indices**: Discretizes control points to binary-encoded Cartesian grid
-- **Dual Output**: Complex optical response (amplitude/phase) + parametric gradients
-- **Masked Multi-Head Attention**: Causal masking in decoder for autoregressive generation
-- **End-to-End Differentiable**: Enables automatic differentiation for structural optimization
-
 ## Requirements
 
 ```bash
 pip install numpy torch matplotlib scikit-learn scipy tqdm meep
-```
-
-## Usage
-
-### Quick Test (Synthetic Data)
-```bash
-python train_model.py --quick_test
-```
-
-### Full Training
-```bash
-python train_model.py --n_samples 500000 --epochs 10000
-```
-
-### Training with MEEP Data
-```bash
-python train_model.py --data_dir ./training_data
-```
-
-### Model Inference
-```bash
-python inference_transformer_model.py
-```
-
-### Metalens Optimization
-```bash
-python metalens_optimization.py
 ```
 
 ## Data Format
