@@ -391,7 +391,7 @@ class NURBSMetaAtomDataset(Dataset):
         )
 
 
-class PaperMatchedNURBSModel:
+class NURBSSurrogateModel:
     """
     Complete model wrapper matching paper specifications:
     
@@ -549,7 +549,7 @@ class PaperMatchedNURBSModel:
               train_loader: DataLoader,
               val_loader: DataLoader,
               epochs: int = 10000,          # Paper: 10,000 epochs
-              save_path: str = "paper_matched_nurbs_model.pth",
+              save_path: str = "nurbs_surrogate_model.pth",
               target_mae: float = 0.0187,   # Paper: MAE 0.0187
               early_stopping_patience: int = 500,
               log_interval: int = 100):
@@ -823,8 +823,8 @@ Output:
 if __name__ == "__main__":
     print_paper_specs()
     
-    print("\nCreating paper-matched model...")
-    model = PaperMatchedNURBSModel(
+    print("\nCreating NURBS surrogate model...")
+    model = NURBSSurrogateModel(
         n_control_points=8,
         d_model=256,
         nhead=12,              # Paper: 12 attention heads

@@ -1,5 +1,5 @@
 """
-Training script for Paper-Matched NURBS Transformer Model
+Training script for NURBS Transformer Surrogate Model
 
 Paper specifications:
 - 500,000 training samples (90% train, 10% validation)
@@ -20,7 +20,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from meta_transformer import (
-    PaperMatchedNURBSModel,
+    NURBSSurrogateModel,
     NURBSMetaAtomDataset,
     create_data_loaders,
     print_paper_specs
@@ -148,7 +148,7 @@ def load_meep_simulation_data(data_dir: str):
     return control_points, wavelengths, phases, transmittances
 
 
-def train_paper_matched_model(args):
+def train_model(args):
     """Main training function"""
     
     print_paper_specs()
@@ -182,8 +182,8 @@ def train_paper_matched_model(args):
     )
     
     # Create model with paper specifications
-    print("\nCreating paper-matched model...")
-    model = PaperMatchedNURBSModel(
+    print("\nCreating NURBS surrogate model...")
+    model = NURBSSurrogateModel(
         n_control_points=8,
         d_model=args.d_model,
         nhead=12,                      # Paper: 12 attention heads
@@ -200,7 +200,7 @@ def train_paper_matched_model(args):
     print("=" * 70)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_path = f"paper_matched_model_{timestamp}.pth"
+    save_path = f"nurbs_model_{timestamp}.pth"
     
     best_mae = model.train(
         train_loader=train_loader,
@@ -349,7 +349,7 @@ def main():
     print(f"  Train/Val split: 90/10")
     print(f"  Target MAE: 0.0187")
     
-    model, best_mae = train_paper_matched_model(args)
+    model, best_mae = train_model(args)
     
     print("\n" + "=" * 70)
     print("Training Complete!")

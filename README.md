@@ -26,8 +26,8 @@ This implementation matches the paper's computational framework:
 
 ```
 nurbs-meta-atoms/
-├── meta_transformer.py              # Main model (paper-matched Encoder-Decoder Transformer)
-├── train_paper_matched_model.py     # Training script
+├── meta_transformer.py              # Main Encoder-Decoder Transformer model
+├── train_model.py                   # Training script
 ├── nurbs_atoms_data.py              # NURBS meta-atom FDTD simulation with MEEP
 ├── generate_training_data_parallel.py # Parallel data generation
 ├── inference_transformer_model.py   # Inference and evaluation
@@ -81,17 +81,17 @@ pip install numpy torch matplotlib scikit-learn scipy tqdm meep
 
 ### Quick Test (Synthetic Data)
 ```bash
-python train_paper_matched_model.py --quick_test
+python train_model.py --quick_test
 ```
 
 ### Full Training (Paper Specifications)
 ```bash
-python train_paper_matched_model.py --n_samples 500000 --epochs 10000
+python train_model.py --n_samples 500000 --epochs 10000
 ```
 
 ### Training with MEEP Data
 ```bash
-python train_paper_matched_model.py --data_dir ./training_data
+python train_model.py --data_dir ./training_data
 ```
 
 ### Model Inference
