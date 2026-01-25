@@ -112,7 +112,7 @@ class NURBSEncoderDecoderTransformer(nn.Module):
     def __init__(self,
                  input_dim: int = 2,
                  n_control_points: int = 8,
-                 d_model: int = 256,
+                 d_model: int = 384,         # Must be divisible by nhead (384/12=32)
                  nhead: int = 12,           # Paper: 12 attention heads
                  num_encoder_layers: int = 8,  # Paper: 8 encoder layers
                  num_decoder_layers: int = 8,  # Matching decoder layers

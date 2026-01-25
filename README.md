@@ -1,50 +1,75 @@
-# NURBS Meta-Atoms for Metalens Design
+# NURBS Meta-Atoms Transformer Model
 
-This project implements a neural network-based approach for designing NURBS (Non-Uniform Rational B-Splines) meta-atoms for metalens applications, inspired by the DFLAT (Deep Focus via Learned Aperture Tuning) methodology. The system uses transformer-based surrogate models to optimize the geometric parameters of meta-atoms to achieve desired optical responses (phase and transmittance).
+A Transformer-based surrogate model for NURBS (Non-Uniform Rational B-Splines) meta-atom optimization, replacing conventional FDTD numerical solvers with parallel accelerated deep learning inference.
 
-## Overview
+## Paper Specifications
 
-The project consists of several components:
+This implementation matches the paper's computational framework:
 
-1. **NURBS Meta-Atom Simulation**: Physics-based simulation using Meep to compute optical properties
-2. **Transformer Surrogate Model**: Neural network model to predict optical response from geometric parameters
-3. **Metalens Optimization**: Design optimization using the surrogate model
-4. **Data Generation**: Tools for creating training datasets
+| Parameter | Value |
+|-----------|-------|
+| **Architecture** | Encoder-Decoder Transformer (Fig. 1c) |
+| **Attention Heads** | 12 |
+| **Encoder/Decoder Layers** | 8 |
+| **Optimizer** | Adam (lr=5×10⁻⁵, β₁=0.9, β₂=0.98) |
+| **Training Samples** | 500,000 |
+| **Train/Val Split** | 90% / 10% |
+| **Training Epochs** | 10,000 |
+| **Target MAE** | 0.0187 |
+| **Control Point Encoding** | Binary encoded grid indices |
+| **Spectrum Range** | 400-700nm |
+| **Mesh Grid** | 10nm |
+| **Curvature Radii** | 50-300nm |
+| **Aspect Ratios** | 0.2-5.0 |
 
 ## Project Structure
 
 ```
 nurbs-meta-atoms/
-├── nurbs_atoms_data.py        # NURBS meta-atom simulation with Meep
-├── transformer_nurbs_model.py # Transformer-based surrogate model
-├── train_transformer_model.py # Training script for the surrogate model
-├── inference_transformer_model.py # Inference and evaluation script
-├── metalens_optimization.py   # Metalens optimization using surrogate model
-├── example_usage.py          # Example usage scripts
-├── dflatdata.ipynb          # Jupyter notebook with example data
-└── README.md               # This file
+├── meta_transformer.py              # Main model (paper-matched Encoder-Decoder Transformer)
+├── train_paper_matched_model.py     # Training script
+├── nurbs_atoms_data.py              # NURBS meta-atom FDTD simulation with MEEP
+├── generate_training_data_parallel.py # Parallel data generation
+├── inference_transformer_model.py   # Inference and evaluation
+├── metalens_optimization.py         # Metalens optimization
+├── example_usage.py                 # Example usage scripts
+├── visualize_field.py               # Field visualization
+└── training_data/                   # Training data directory
 ```
 
-## Features
+## Model Architecture
 
-### NURBS Meta-Atom Simulation
-- Implementation of NURBS curves for meta-atom geometry
-- Electromagnetic simulation using Meep FDTD solver
-- Calculation of phase and transmittance for given geometric parameters
-- Support for various NURBS shapes through control points
+### Encoder-Decoder Transformer (Fig. 1c)
 
-### Transformer Surrogate Model
-- Transformer-based architecture for predicting optical response
-- Input: Control points coordinates of NURBS meta-atoms
-- Output: Phase and transmittance values
-- Handles sequence-to-value mapping efficiently
-- Attention mechanism captures complex geometric relationships
+```
+Input NURBS Parameters → Binary Grid Encoder → Linear → Linear
+                                                  ↓
+                              ┌─────────────────────────────────────┐
+                              │         ENCODER (8 layers)          │
+                              │  Multi-Head Attention (12 heads)    │
+                              │  → Add & Norm → Feed Forward        │
+                              │  → Add & Norm                       │
+                              └─────────────────────────────────────┘
+                                                  ↓
+                              ┌─────────────────────────────────────┐
+                              │         DECODER (8 layers)          │
+                              │  Masked Multi-Head Attention        │
+                              │  → Add & Norm → Cross Attention     │
+                              │  → Add & Norm → Feed Forward        │
+                              │  → Add & Norm                       │
+                              └─────────────────────────────────────┘
+                                                  ↓
+                         ┌────────────────┬────────────────┐
+                         │  Optical Head  │  Gradient Head │
+                         │ (phase, amp)   │ (∂/∂params)    │
+                         └────────────────┴────────────────┘
+```
 
-### Metalens Optimization
-- Optimization of metalens focusing properties
-- Uses surrogate model for fast evaluation
-- Implements phase profile matching for focusing applications
-- Calculates focusing efficiency metrics
+### Key Features
+- **Binary Encoded Grid Indices**: Discretizes control points to binary-encoded Cartesian grid
+- **Dual Output**: Complex optical response (amplitude/phase) + parametric gradients
+- **Masked Multi-Head Attention**: Causal masking in decoder for autoregressive generation
+- **End-to-End Differentiable**: Enables automatic differentiation for structural optimization
 
 ## Requirements
 
@@ -54,108 +79,54 @@ pip install numpy torch matplotlib scikit-learn scipy tqdm meep
 
 ## Usage
 
-### 1. Training the Surrogate Model
-
+### Quick Test (Synthetic Data)
 ```bash
-# Generate training data and train the transformer model
-python train_transformer_model.py --train
+python train_paper_matched_model.py --quick_test
 ```
 
-### 2. Model Inference
-
+### Full Training (Paper Specifications)
 ```bash
-# Test the trained model
+python train_paper_matched_model.py --n_samples 500000 --epochs 10000
+```
+
+### Training with MEEP Data
+```bash
+python train_paper_matched_model.py --data_dir ./training_data
+```
+
+### Model Inference
+```bash
 python inference_transformer_model.py
 ```
 
-### 3. Metalens Optimization
-
+### Metalens Optimization
 ```bash
-# Optimize metalens design using the surrogate model
 python metalens_optimization.py
 ```
-
-### 4. Example Usage
-
-```bash
-# Run example workflows
-python example_usage.py
-```
-
-## Model Architecture
-
-The transformer-based surrogate model consists of:
-
-- **Input Projection**: Maps 2D control point coordinates to model dimension
-- **Positional Encoding**: Adds positional information to sequence
-- **Transformer Encoder**: Multiple layers of multi-head attention
-- **Output Projection**: Maps to 2D output (phase, transmittance)
-
-### Key Parameters:
-- Input: 8 control points × 2 coordinates each
-- Model dimension: 128
-- Attention heads: 8
-- Transformer layers: 4
-- Output: 2 values (phase, transmittance)
-
-## DFLAT-Style Metalens Design
-
-The optimization follows the DFLAT methodology:
-
-1. **Phase Profile Calculation**: Compute ideal phase distribution for focusing
-2. **Segment Optimization**: Optimize each annular segment independently
-3. **Surrogate Model Usage**: Fast evaluation using trained neural network
-4. **Efficiency Calculation**: Quantify focusing performance
-
-### Ideal Phase Profile
-For a metalens with focal length `f` and radial position `r`:
-```
-φ(r) = -k * (sqrt(r² + f²) - f)
-```
-where `k = 2π/λ` is the wave number.
 
 ## Data Format
 
 Training data consists of:
-- **Input**: Control points coordinates as (N, 2) array where N is number of control points
-- **Output**: [phase, transmittance] as (2,) array
-- **Phase**: Ranges from -π to π radians
-- **Transmittance**: Ranges from 0 to 1
+- **Input**: Control points `(n_samples, 8, 2)` - 8 control points with (x, y) coordinates normalized to [0, 1]
+- **Wavelengths**: `(n_samples,)` - wavelength values in nm (400-700nm range)
+- **Phase**: `(n_samples,)` - phase response in radians [-π, π]
+- **Transmittance**: `(n_samples,)` - amplitude/transmittance [0, 1]
 
 ## Performance Metrics
 
-The system evaluates performance using:
-- Mean Squared Error (MSE) for phase and transmittance
-- Mean Absolute Error (MAE) for phase and transmittance
-- R² coefficient of determination
-- Focusing efficiency for metalens applications
+| Metric | Description |
+|--------|-------------|
+| **MAE** | Mean Absolute Error (target: 0.0187) |
+| **MSE** | Mean Squared Error |
+| **R²** | Coefficient of determination |
 
-## Applications
+## FDTD Data Generation
 
-This system can be used for:
-- Metalens design optimization
-- Achromatic metalens development
-- Multi-wavelength optical devices
-- Beam shaping applications
-- Holographic elements
-
-## Future Improvements
-
-Potential enhancements include:
-- Multi-wavelength surrogate modeling
-- Polarization-dependent response
-- Manufacturing constraint integration
-- Real-time optimization algorithms
-- Integration with fabrication processes
-
-## References
-
-This work is inspired by the DFLAT methodology and related research in computational metasurfaces:
-
-- DFLAT: Deep Focus via Learned Aperture Tuning
-- NURBS-based meta-atom design
-- Transformer architectures for physical systems
+Training data is generated using MEEP FDTD simulations:
+```bash
+python generate_training_data_parallel.py --n_samples 500000 --n_workers 8
+```
 
 ## License
 
-This project is open-source and available under the MIT License.# nurbs-meta-atoms
+MIT License

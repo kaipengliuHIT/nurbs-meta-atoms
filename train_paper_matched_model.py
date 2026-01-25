@@ -299,8 +299,8 @@ def main():
                        help='Save generated training data')
     
     # Model arguments (paper-specified defaults)
-    parser.add_argument('--d_model', type=int, default=256,
-                       help='Model dimension')
+    parser.add_argument('--d_model', type=int, default=384,
+                       help='Model dimension (must be divisible by 12 heads)')
     parser.add_argument('--d_ff', type=int, default=1024,
                        help='Feed-forward dimension')
     parser.add_argument('--dropout', type=float, default=0.1,
