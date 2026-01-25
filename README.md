@@ -1,26 +1,27 @@
 # NURBS Meta-Atoms Transformer Model
 
-A Transformer-based surrogate model for NURBS (Non-Uniform Rational B-Splines) meta-atom optimization, replacing conventional FDTD numerical solvers with parallel accelerated deep learning inference.
+A configurable Transformer-based surrogate model for NURBS (Non-Uniform Rational B-Splines) meta-atom optimization. Replaces conventional FDTD numerical solvers with parallel accelerated deep learning inference.
 
-## Paper Specifications
+## Features
 
-This implementation matches the paper's computational framework:
+- **Flexible Architecture**: Configurable attention heads, encoder/decoder layers, model dimensions
+- **Binary Grid Encoding**: Efficient discretization of NURBS control points
+- **Dual Output**: Predicts optical response (phase/amplitude) and parametric gradients
+- **End-to-End Differentiable**: Enables automatic differentiation for structural optimization
+- **MEEP Integration**: Compatible with FDTD simulation data generation
 
-| Parameter | Value |
-|-----------|-------|
-| **Architecture** | Encoder-Decoder Transformer (Fig. 1c) |
-| **Attention Heads** | 12 |
-| **Encoder/Decoder Layers** | 8 |
-| **Optimizer** | Adam (lr=5×10⁻⁵, β₁=0.9, β₂=0.98) |
-| **Training Samples** | 500,000 |
-| **Train/Val Split** | 90% / 10% |
-| **Training Epochs** | 10,000 |
-| **Target MAE** | 0.0187 |
-| **Control Point Encoding** | Binary encoded grid indices |
-| **Spectrum Range** | 400-700nm |
-| **Mesh Grid** | 10nm |
-| **Curvature Radii** | 50-300nm |
-| **Aspect Ratios** | 0.2-5.0 |
+## Default Configuration
+
+| Parameter | Default | Configurable |
+|-----------|---------|--------------|
+| **Architecture** | Encoder-Decoder Transformer | ✓ |
+| **Attention Heads** | 12 | ✓ |
+| **Encoder/Decoder Layers** | 8 | ✓ |
+| **Model Dimension** | 384 | ✓ |
+| **Optimizer** | Adam | ✓ |
+| **Learning Rate** | 5×10⁻⁵ | ✓ |
+| **Control Point Encoding** | Binary grid indices | ✓ |
+| **Spectrum Range** | 400-700nm | ✓ |
 
 ## Project Structure
 
@@ -39,7 +40,7 @@ nurbs-meta-atoms/
 
 ## Model Architecture
 
-### Encoder-Decoder Transformer (Fig. 1c)
+### Encoder-Decoder Transformer
 
 ```
 Input NURBS Parameters → Binary Grid Encoder → Linear → Linear
@@ -84,7 +85,7 @@ pip install numpy torch matplotlib scikit-learn scipy tqdm meep
 python train_model.py --quick_test
 ```
 
-### Full Training (Paper Specifications)
+### Full Training
 ```bash
 python train_model.py --n_samples 500000 --epochs 10000
 ```
@@ -116,7 +117,7 @@ Training data consists of:
 
 | Metric | Description |
 |--------|-------------|
-| **MAE** | Mean Absolute Error (target: 0.0187) |
+| **MAE** | Mean Absolute Error |
 | **MSE** | Mean Squared Error |
 | **R²** | Coefficient of determination |
 
