@@ -59,3 +59,8 @@ Thumbs.db
 *.mat
 *.hdf5
 *.npz
+
+# Lumerical simulation outputs
+*.fsp
+*_p*.log
+lumerical_runs/

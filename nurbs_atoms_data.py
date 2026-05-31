@@ -8,6 +8,7 @@ import meep as mp
 
 # Global cache for reference flux (for normalizing transmittance)
 _reference_flux_cache = {}
+UNIT_CELL_XY_SPAN_UM = 0.5
 
 
 def sort_points_ccw(points):
@@ -77,7 +78,7 @@ def get_reference_flux(freq_center, freq_span, frequency_points, resolution=50, 
     # Add flux monitor
     tran_region = mp.FluxRegion(
         center=mp.Vector3(0, 0, 0.8),
-        size=mp.Vector3(0.4, 0.4, 0)
+        size=mp.Vector3(UNIT_CELL_XY_SPAN_UM, UNIT_CELL_XY_SPAN_UM, 0)
     )
     tran_mon = sim_ref.add_flux(freq_center, freq_span, frequency_points, tran_region)
     
@@ -138,6 +139,7 @@ class Simulation:
         self.resolution = 50  # pixels per um
         # Set simulation domain size (x, y, z) in um
         self.cell_size = mp.Vector3(0.5, 0.5, 3.0)  # 0.5um x 0.5um x 3um
+        self.transmission_monitor_span = UNIT_CELL_XY_SPAN_UM
         # Set PML layers - add PML in z direction, use periodic boundaries for x and y
         self.pml_layers = [mp.PML(0.5, direction=mp.Z)]  # PML thickness 0.5 um
         self.geometry = []
@@ -344,7 +346,7 @@ class Simulation:
         # Add transmission monitor
         tran_region = mp.FluxRegion(
             center=mp.Vector3(0, 0, 0.8),  # Transmission plane at z=0.8 um
-            size=mp.Vector3(0.4, 0.4, 0)  # Monitor size
+            size=mp.Vector3(self.transmission_monitor_span, self.transmission_monitor_span, 0)
         )
         
         # Add phase monitor
